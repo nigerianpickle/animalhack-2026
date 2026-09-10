@@ -4,6 +4,7 @@ import { useState } from "react";
 import dynamic from "next/dynamic";
 import HistoryFilter from "./components/HistoryFilter";
 import CategoryFilter from "./components/CategoryFilter";
+import InsightFeed from "./components/InsightFeed";
 
 const HotspotMap = dynamic(
   () => import("./components/HotspotMap"),
@@ -28,10 +29,18 @@ export default function Home() {
         onChange={setCategory}
       />
 
-      <HotspotMap
-        period={period}
-        category={category}
-      />
+      <div style={{ display: "flex", gap: "20px", marginTop: "20px" }}>
+        <div style={{ flex: 2 }}>
+          <HotspotMap
+            period={period}
+            category={category}
+          />
+        </div>
+        <div style={{ flex: 1, minWidth: "320px" }}>
+          <h2 style={{ marginTop: 0 }}>AI Intelligence Feed</h2>
+          <InsightFeed />
+        </div>
+      </div>
     </main>
   );
 }
