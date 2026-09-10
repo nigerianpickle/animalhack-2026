@@ -1,40 +1,55 @@
 import { NextResponse } from 'next/server';
+import { generateCampaignPlan } from '@/lib/llm';
+import type { ActionType } from '@/lib/stats';
 
-// In-memory store for the demo — swap for a real Campaign table if you add one to Prisma later
-const campaigns: {
+export const maxDuration = 60;
+
+type StoredCampaign = {
   id: string;
-  neighbourhood: string;
+  area: string;
   category: string;
-  type: 'foster_recruitment' | 'adoption_event' | 'notify_partners';
-  status: 'launched';
+  actionType: ActionType;
+  plan: Awaited<ReturnType<typeof generateCampaignPlan>>;
+  status: 'planned';
   createdAt: string;
-}[] = [];
+};
+
+const campaigns: StoredCampaign[] = [];
 
 export async function GET() {
   return NextResponse.json(campaigns);
 }
 
 export async function POST(req: Request) {
-  const body = await req.json();
-  const { neighbourhood, category, type } = body;
+  try {
+    const { area, areaType, category, actionType, facts } = await req.json();
 
-  if (!neighbourhood || !category || !type) {
-    return NextResponse.json(
-      { error: 'Missing required fields: neighbourhood, category, type' },
-      { status: 400 }
-    );
+    if (!area || !actionType) {
+      return NextResponse.json({ error: 'Missing area or actionType' }, { status: 400 });
+    }
+
+    const plan = await generateCampaignPlan({
+      actionType,
+      area,
+      areaType: areaType ?? 'area',
+      category: category ?? 'all',
+      facts: Array.isArray(facts) ? facts : [],
+    });
+
+    const campaign: StoredCampaign = {
+      id: crypto.randomUUID(),
+      area,
+      category: category ?? 'all',
+      actionType,
+      plan,
+      status: 'planned',
+      createdAt: new Date().toISOString(),
+    };
+    campaigns.push(campaign);
+
+    return NextResponse.json(campaign, { status: 201 });
+  } catch (err) {
+    console.error('[campaigns] fatal:', err);
+    return NextResponse.json({ error: 'Failed to build campaign plan' }, { status: 500 });
   }
-
-  const campaign = {
-    id: crypto.randomUUID(),
-    neighbourhood,
-    category,
-    type,
-    status: 'launched' as const,
-    createdAt: new Date().toISOString(),
-  };
-
-  campaigns.push(campaign);
-
-  return NextResponse.json(campaign, { status: 201 });
 }

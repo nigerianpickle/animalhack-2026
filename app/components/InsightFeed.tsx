@@ -4,100 +4,178 @@ import { useEffect, useState } from 'react';
 import CampaignCard from './CampaignCard';
 
 type Insight = {
-  type: 'trend' | 'pattern' | 'suggestion';
+  type: 'trend' | 'pattern' | 'suggestion' | 'baseline';
   title: string;
   body: string;
-  neighbourhood: string;
+  action: string;
+  actionTypes: any[];
+  area: string;
+  areaType: string;
   category: string;
   metricValue: number;
+  sampleSize: number;
+  confidence: 'high' | 'medium' | 'low';
+  kind: string;
+  generated: boolean;
+  _facts: string[];
 };
 
-const TYPE_CONFIG: Record<Insight['type'], { emoji: string; label: string; color: string }> = {
-  trend: { emoji: '🚨', label: 'Emerging Trend', color: '#e63946' },
-  pattern: { emoji: '📈', label: 'Pattern Detected', color: '#f4a261' },
-  suggestion: { emoji: '💡', label: 'Suggestion', color: '#2a9d8f' },
-};
+const TYPE_CONFIG = {
+  trend: { emoji: '🚨', label: 'Emerging trend', color: '#c1121f', tint: '#fdf0f1' },
+  pattern: { emoji: '📈', label: 'Recurring pattern', color: '#b26a00', tint: '#fff8ec' },
+  suggestion: { emoji: '💡', label: 'Structural finding', color: '#1b7f6b', tint: '#eefaf6' },
+  baseline: { emoji: '📍', label: 'Sustained hotspot', color: '#475467', tint: '#f2f4f7' },
+} as const;
+
+const CONFIDENCE_UI = {
+  high: { label: 'High confidence', color: '#1b7f6b' },
+  medium: { label: 'Medium confidence', color: '#b26a00' },
+  low: { label: 'Low confidence', color: '#98a2b3' },
+} as const;
+
+function Skeleton() {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {[0, 1, 2].map((i) => (
+        <div key={i} style={{ border: '1px solid #e8e8ec', borderRadius: 12, padding: 16, background: '#fff' }}>
+          <div style={{ height: 10, width: 120, background: '#eef0f3', borderRadius: 4, marginBottom: 12 }} />
+          <div style={{ height: 14, width: '72%', background: '#eef0f3', borderRadius: 4, marginBottom: 10 }} />
+          <div style={{ height: 10, width: '96%', background: '#f3f4f6', borderRadius: 4, marginBottom: 6 }} />
+          <div style={{ height: 10, width: '84%', background: '#f3f4f6', borderRadius: 4 }} />
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export default function InsightFeed() {
   const [insights, setInsights] = useState<Insight[]>([]);
+  const [meta, setMeta] = useState<{ areaLabel?: string; reportCount?: number } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  function load() {
+    setLoading(true);
+    setError(null);
     fetch('/api/insights')
-      .then((res) => {
-        if (!res.ok) throw new Error(`Failed to load insights: ${res.status}`);
-        return res.json();
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`Request failed (${r.status})`))))
+      .then((d) => {
+        setInsights(d.insights ?? []);
+        setMeta(d.meta ?? null);
       })
-      .then((data: Insight[]) => setInsights(data))
-      .catch((err) => setError(err.message))
+      .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
-  }, []);
-
-  if (loading) {
-    return (
-      <div style={{ padding: '1rem', color: '#666' }}>
-        Analyzing recent reports...
-      </div>
-    );
   }
+
+  useEffect(load, []);
+
+  if (loading) return <Skeleton />;
 
   if (error) {
     return (
-      <div style={{ padding: '1rem', color: '#e63946' }}>
-        Couldn&apos;t load insights: {error}
-      </div>
-    );
-  }
-
-  if (insights.length === 0) {
-    return (
-      <div style={{ padding: '1rem', color: '#666' }}>
-        No significant trends detected right now.
+      <div style={{ padding: 16, border: '1px solid #f2c9cd', background: '#fdf0f1', borderRadius: 12 }}>
+        <div style={{ color: '#c1121f', fontSize: 13, marginBottom: 8 }}>{error}</div>
+        <button onClick={load} style={{ fontSize: 13, padding: '6px 12px', borderRadius: 8, border: '1px solid #d0d5dd', background: '#fff', cursor: 'pointer' }}>
+          Retry
+        </button>
       </div>
     );
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-      {insights.map((insight, i) => {
-        const config = TYPE_CONFIG[insight.type];
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {meta && (
+        <div style={{ fontSize: 11.5, color: '#98a2b3', lineHeight: 1.5 }}>
+          Analysed {meta.reportCount?.toLocaleString()} City of Winnipeg 311 animal service requests, aggregated by{' '}
+          {meta.areaLabel}. These are community reports, a proxy for shelter demand — not shelter intake records.
+        </div>
+      )}
+
+      {insights.map((ins, i) => {
+        const cfg = TYPE_CONFIG[ins.type] ?? TYPE_CONFIG.trend;
+        const conf = CONFIDENCE_UI[ins.confidence] ?? CONFIDENCE_UI.low;
+        const showDelta = ins.kind !== 'sustained' && ins.metricValue !== 0;
+
         return (
-          <div
+          <article
             key={i}
             style={{
-              border: '1px solid #e0e0e0',
-              borderLeft: `4px solid ${config.color}`,
-              borderRadius: '8px',
-              padding: '1rem',
+              border: '1px solid #e8e8ec',
+              borderLeft: `4px solid ${cfg.color}`,
+              borderRadius: 12,
+              padding: 16,
               background: '#fff',
+              boxShadow: '0 1px 2px rgba(16,24,40,0.04)',
             }}
           >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <span
+                style={{
+                  fontSize: 10.5,
+                  fontWeight: 700,
+                  color: cfg.color,
+                  background: cfg.tint,
+                  padding: '3px 8px',
+                  borderRadius: 999,
+                  letterSpacing: '0.04em',
+                  textTransform: 'uppercase',
+                }}
+              >
+                {cfg.emoji} {cfg.label}
+              </span>
+              {showDelta && (
+                <span style={{ fontSize: 13, fontWeight: 700, color: ins.metricValue >= 0 ? '#c1121f' : '#1b7f6b' }}>
+                  {ins.metricValue > 0 ? '▲ +' : '▼ '}
+                  {Math.abs(ins.metricValue)}%
+                </span>
+              )}
+            </div>
+
+            <h3 style={{ margin: '0 0 6px', fontSize: 15, fontWeight: 700, color: '#101828', lineHeight: 1.35 }}>
+              {ins.title}
+            </h3>
+            <p style={{ margin: '0 0 10px', fontSize: 13.5, lineHeight: 1.55, color: '#475467' }}>{ins.body}</p>
+
             <div
               style={{
-                fontSize: '0.75rem',
-                fontWeight: 600,
-                color: config.color,
-                textTransform: 'uppercase',
-                letterSpacing: '0.03em',
-                marginBottom: '0.4rem',
+                fontSize: 12.5,
+                color: '#344054',
+                background: '#f7f8fa',
+                border: '1px solid #eceef1',
+                borderRadius: 8,
+                padding: '8px 10px',
+                marginBottom: 10,
+                lineHeight: 1.5,
               }}
             >
-              {config.emoji} {config.label}
+              <strong style={{ color: '#101828' }}>Recommended: </strong>
+              {ins.action}
             </div>
-            <div style={{ fontWeight: 600, marginBottom: '0.3rem' }}>
-              {insight.title}
+
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', fontSize: 11, color: '#98a2b3' }}>
+              <span>{ins.area}</span>
+              <span>·</span>
+              <span>{String(ins.category).replace(/_/g, ' ')}</span>
+              <span>·</span>
+              <span>n={ins.sampleSize}</span>
+              <span>·</span>
+              <span style={{ color: conf.color, fontWeight: 600 }}>{conf.label}</span>
+              {!ins.generated && (
+                <>
+                  <span>·</span>
+                  <span style={{ color: '#b26a00' }}>computed summary</span>
+                </>
+              )}
             </div>
-            <div style={{ fontSize: '0.9rem', color: '#444', marginBottom: '0.5rem' }}>
-              {insight.body}
-            </div>
-            <div style={{ fontSize: '0.75rem', color: '#999' }}>
-              {insight.neighbourhood} · {insight.category.replace('_', ' ')} ·{' '}
-              {insight.metricValue > 0 ? '+' : ''}
-              {insight.metricValue}%
-            </div>
-            <CampaignCard neighbourhood={insight.neighbourhood} category={insight.category} />
-          </div>
+
+            <CampaignCard
+              area={ins.area}
+              areaType={ins.areaType}
+              category={ins.category}
+              actionTypes={ins.actionTypes}
+              facts={ins._facts ?? []}
+            />
+          </article>
         );
       })}
     </div>
