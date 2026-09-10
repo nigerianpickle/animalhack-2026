@@ -1,46 +1,146 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import HistoryFilter from "./components/HistoryFilter";
 import CategoryFilter from "./components/CategoryFilter";
 import InsightFeed from "./components/InsightFeed";
 
-const HotspotMap = dynamic(
-  () => import("./components/HotspotMap"),
-  { ssr: false }
-);
+const HotspotMap = dynamic(() => import("./components/HotspotMap"), { ssr: false });
+
+type Report = {
+  category: string;
+  neighbourhood: string;
+  date: string;
+};
+
+function StatCard({ label, value, hint }: { label: string; value: string; hint?: string }) {
+  return (
+    <div
+      style={{
+        flex: 1,
+        minWidth: 150,
+        background: "#fff",
+        border: "1px solid #e8e8ec",
+        borderRadius: 12,
+        padding: "14px 16px",
+        boxShadow: "0 1px 2px rgba(16,24,40,0.04)",
+      }}
+    >
+      <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em", color: "#98a2b3", fontWeight: 700 }}>
+        {label}
+      </div>
+      <div style={{ fontSize: 24, fontWeight: 700, color: "#101828", marginTop: 4 }}>{value}</div>
+      {hint && <div style={{ fontSize: 12, color: "#667085", marginTop: 2 }}>{hint}</div>}
+    </div>
+  );
+}
 
 export default function Home() {
   const [period, setPeriod] = useState("all");
   const [category, setCategory] = useState("all");
+  const [reports, setReports] = useState<Report[]>([]);
+
+  useEffect(() => {
+    fetch("/api/reports")
+      .then((r) => (r.ok ? r.json() : []))
+      .then(setReports)
+      .catch(() => setReports([]));
+  }, []);
+
+  const total = reports.length;
+  const neighbourhoods = new Set(reports.map((r) => r.neighbourhood)).size;
+
+  const topNeighbourhood = (() => {
+    const counts = new Map<string, number>();
+    reports.forEach((r) => counts.set(r.neighbourhood, (counts.get(r.neighbourhood) ?? 0) + 1));
+    return [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
+  })();
+
+  const topCategory = (() => {
+    const counts = new Map<string, number>();
+    reports.forEach((r) => counts.set(r.category, (counts.get(r.category) ?? 0) + 1));
+    return [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
+  })();
 
   return (
-    <main style={{ padding: "20px" }}>
-      <h1>Winnipeg Animal Hotspot Map</h1>
+    <div style={{ minHeight: "100vh", background: "#f7f8fa", color: "#101828" }}>
+      <header
+        style={{
+          background: "#fff",
+          borderBottom: "1px solid #e8e8ec",
+          padding: "16px 24px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 16,
+          flexWrap: "wrap",
+        }}
+      >
+        <div>
+          <div style={{ fontSize: 18, fontWeight: 800, letterSpacing: "-0.01em" }}>
+            🐾 Winnipeg Animal Welfare Operations
+          </div>
+          <div style={{ fontSize: 13, color: "#667085", marginTop: 2 }}>
+            What&apos;s happening, why it&apos;s happening, and what to do about it.
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+          <HistoryFilter value={period} onChange={setPeriod} />
+          <CategoryFilter value={category} onChange={setCategory} />
+        </div>
+      </header>
 
-      <HistoryFilter
-        value={period}
-        onChange={setPeriod}
-      />
-
-      <CategoryFilter
-        value={category}
-        onChange={setCategory}
-      />
-
-      <div style={{ display: "flex", gap: "20px", marginTop: "20px" }}>
-        <div style={{ flex: 2 }}>
-          <HotspotMap
-            period={period}
-            category={category}
+      <main style={{ padding: 24, maxWidth: 1600, margin: "0 auto" }}>
+        <section style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 20 }}>
+          <StatCard label="Total reports" value={total ? total.toLocaleString() : "—"} hint="City of Winnipeg 311 data" />
+          <StatCard label="Neighbourhoods" value={neighbourhoods ? String(neighbourhoods) : "—"} hint="with at least one report" />
+          <StatCard
+            label="Highest volume area"
+            value={topNeighbourhood ? topNeighbourhood[0] : "—"}
+            hint={topNeighbourhood ? `${topNeighbourhood[1]} reports` : undefined}
           />
-        </div>
-        <div style={{ flex: 1, minWidth: "320px" }}>
-          <h2 style={{ marginTop: 0 }}>AI Intelligence Feed</h2>
-          <InsightFeed />
-        </div>
-      </div>
-    </main>
+          <StatCard
+            label="Most common issue"
+            value={topCategory ? topCategory[0].replace(/_/g, " ") : "—"}
+            hint={topCategory ? `${topCategory[1]} reports` : undefined}
+          />
+        </section>
+
+        <section
+          style={{
+            display: "grid",
+            gridTemplateColumns: "minmax(0, 2fr) minmax(340px, 1fr)",
+            gap: 20,
+            alignItems: "start",
+          }}
+        >
+          <div
+            style={{
+              background: "#fff",
+              border: "1px solid #e8e8ec",
+              borderRadius: 12,
+              padding: 12,
+              boxShadow: "0 1px 2px rgba(16,24,40,0.04)",
+            }}
+          >
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#344054", marginBottom: 8, paddingLeft: 4 }}>
+              Hotspot Map
+            </div>
+            <HotspotMap period={period} category={category} />
+          </div>
+
+          <aside style={{ position: "sticky", top: 20 }}>
+            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 10 }}>
+              <h2 style={{ fontSize: 15, fontWeight: 800, margin: 0 }}>AI Intelligence Feed</h2>
+              <span style={{ fontSize: 11.5, color: "#98a2b3" }}>auto-generated</span>
+            </div>
+            <div style={{ maxHeight: "calc(100vh - 140px)", overflowY: "auto", paddingRight: 4 }}>
+              <InsightFeed />
+            </div>
+          </aside>
+        </section>
+      </main>
+    </div>
   );
 }
