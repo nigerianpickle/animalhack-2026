@@ -11,6 +11,7 @@ const HotspotMap = dynamic(() => import("./components/HotspotMap"), { ssr: false
 type Report = {
   category: string;
   neighbourhood: string;
+  ward: string;
   date: string;
 };
 
@@ -39,6 +40,7 @@ function StatCard({ label, value, hint }: { label: string; value: string; hint?:
 export default function Home() {
   const [period, setPeriod] = useState("all");
   const [category, setCategory] = useState("all");
+  const [scope, setScope] = useState<"live" | "historical">("live");
   const [reports, setReports] = useState<Report[]>([]);
 
   useEffect(() => {
@@ -49,11 +51,15 @@ export default function Home() {
   }, []);
 
   const total = reports.length;
-  const neighbourhoods = new Set(reports.map((r) => r.neighbourhood)).size;
+  const wards = new Set(reports.map((r) => r.ward).filter(Boolean)).size;
 
-  const topNeighbourhood = (() => {
+  const dates = reports.map((r) => new Date(r.date).getTime()).filter((t) => !Number.isNaN(t));
+  const fmt = (t: number) => new Date(t).toLocaleString("en-CA", { month: "short", year: "numeric" });
+  const range = dates.length ? `${fmt(Math.min(...dates))} – ${fmt(Math.max(...dates))}` : "—";
+
+  const topWard = (() => {
     const counts = new Map<string, number>();
-    reports.forEach((r) => counts.set(r.neighbourhood, (counts.get(r.neighbourhood) ?? 0) + 1));
+    reports.forEach((r) => r.ward && counts.set(r.ward, (counts.get(r.ward) ?? 0) + 1));
     return [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
   })();
 
@@ -62,6 +68,28 @@ export default function Home() {
     reports.forEach((r) => counts.set(r.category, (counts.get(r.category) ?? 0) + 1));
     return [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
   })();
+
+  const tab = (id: "live" | "historical", label: string, sub: string) => {
+    const active = scope === id;
+    return (
+      <button
+        key={id}
+        onClick={() => setScope(id)}
+        style={{
+          flex: 1,
+          textAlign: "left",
+          padding: "8px 10px",
+          borderRadius: 8,
+          border: active ? "1px solid #d0c8f5" : "1px solid transparent",
+          background: active ? "#f1eefc" : "transparent",
+          cursor: "pointer",
+        }}
+      >
+        <div style={{ fontSize: 12.5, fontWeight: 700, color: active ? "#5b3fd6" : "#475467" }}>{label}</div>
+        <div style={{ fontSize: 10.5, color: "#98a2b3", marginTop: 1 }}>{sub}</div>
+      </button>
+    );
+  };
 
   return (
     <div style={{ minHeight: "100vh", background: "#f7f8fa", color: "#101828" }}>
@@ -93,12 +121,12 @@ export default function Home() {
 
       <main style={{ padding: 24, maxWidth: 1600, margin: "0 auto" }}>
         <section style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 20 }}>
-          <StatCard label="Total reports" value={total ? total.toLocaleString() : "—"} hint="City of Winnipeg 311 data" />
-          <StatCard label="Neighbourhoods" value={neighbourhoods ? String(neighbourhoods) : "—"} hint="with at least one report" />
+          <StatCard label="Total reports" value={total ? total.toLocaleString() : "—"} hint={range} />
+          <StatCard label="Wards" value={wards ? String(wards) : "—"} hint="City of Winnipeg 311 data" />
           <StatCard
-            label="Highest volume area"
-            value={topNeighbourhood ? topNeighbourhood[0] : "—"}
-            hint={topNeighbourhood ? `${topNeighbourhood[1]} reports` : undefined}
+            label="Highest-load ward"
+            value={topWard ? topWard[0] : "—"}
+            hint={topWard ? `${topWard[1]} reports` : undefined}
           />
           <StatCard
             label="Most common issue"
@@ -110,7 +138,7 @@ export default function Home() {
         <section
           style={{
             display: "grid",
-            gridTemplateColumns: "minmax(0, 2fr) minmax(340px, 1fr)",
+            gridTemplateColumns: "minmax(0, 2fr) minmax(360px, 1fr)",
             gap: 20,
             alignItems: "start",
           }}
@@ -131,12 +159,25 @@ export default function Home() {
           </div>
 
           <aside style={{ position: "sticky", top: 20 }}>
-            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 10 }}>
-              <h2 style={{ fontSize: 15, fontWeight: 800, margin: 0 }}>AI Intelligence Feed</h2>
-              <span style={{ fontSize: 11.5, color: "#98a2b3" }}>auto-generated</span>
+            <h2 style={{ fontSize: 15, fontWeight: 800, margin: "0 0 8px" }}>AI Intelligence Feed</h2>
+
+            <div
+              style={{
+                display: "flex",
+                gap: 6,
+                background: "#fff",
+                border: "1px solid #e8e8ec",
+                borderRadius: 10,
+                padding: 4,
+                marginBottom: 12,
+              }}
+            >
+              {tab("live", "Current view", "Follows your filters")}
+              {tab("historical", "Historical patterns", "Multi-year, unfiltered")}
             </div>
-            <div style={{ maxHeight: "calc(100vh - 140px)", overflowY: "auto", paddingRight: 4 }}>
-              <InsightFeed />
+
+            <div style={{ maxHeight: "calc(100vh - 210px)", overflowY: "auto", paddingRight: 4 }}>
+              <InsightFeed scope={scope} category={category} period={period} />
             </div>
           </aside>
         </section>

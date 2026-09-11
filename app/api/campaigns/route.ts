@@ -31,8 +31,6 @@ export async function POST(req: Request) {
     const plan = await generateCampaignPlan({
       actionType,
       area,
-      areaType: areaType ?? 'area',
-      category: category ?? 'all',
       facts: Array.isArray(facts) ? facts : [],
     });
 
