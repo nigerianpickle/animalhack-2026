@@ -1,3 +1,4 @@
+import { prisma } from '@/lib/db';
 export type Category =
   | 'stray_roaming'
   | 'lost_found'
@@ -89,12 +90,23 @@ export type DatasetMeta = {
   windowLabel: string;
 };
 
-const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-
 export async function fetchReports(): Promise<Report[]> {
-  const res = await fetch(`${BASE_URL}/api/reports`, { cache: 'no-store' });
-  if (!res.ok) throw new Error(`Failed to fetch reports: ${res.status}`);
-  return res.json();
+  const reports = await prisma.report.findMany({
+    orderBy: {
+      date: 'asc',
+    },
+  });
+
+  return reports.map((report) => ({
+    id: report.id,
+    rawType: report.rawType,
+    category: report.category as Category,
+    date: report.date.toISOString(),
+    neighbourhood: report.neighbourhood,
+    ward: report.ward ?? '',
+    lat: report.lat,
+    lng: report.lng,
+  }));
 }
 
 /* ---------------- helpers ---------------- */
